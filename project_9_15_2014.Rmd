@@ -1,0 +1,352 @@
+---
+title: "Prediction Project Write-up report "
+
+---
+***Background*** 
+
+The data from the area of Human Activity Recognition, provided consists six young health participants were asked to perform exercise repetitively. This consists of one set of 10 repetitions of the Unilateral Dumbbell Biceps Curl in five different fashions: exactly according to the specification (Class A), throwing the elbows to the front (Class B), lifting the dumbbell only halfway (Class C), lowering the dumbbell only halfway (Class D) and throwing the hips to the front (Class E).The details of the project is provided here [http://groupware.les.inf.puc-rio.br/har](http://groupware.les.inf.puc-rio.br/har). 
+
+***Data analysis results***
+
+In the following section I have discussed the different steps along with scripts and outputs. 
+
+<img class=center src=/Users/umesh.rosyara/Documents/GitHub/mlc/figure/work_flow.jpg height=150> 
+
+Note: Execution of some of chucks is disabled that need long time to run. Output of such chucks is provided please feel free run such chucks, if needed. Also results of some of just pipeline chunks is hidden. 
+
+**Reading the data** 
+
+```{r, results='hide'}
+setwd("C:/Users/umesh.rosyara/Documents/GitHub/mlc/data")
+humactivity <- read.csv("pml-training.csv", head = TRUE)
+summary(humactivity) 
+```
+
+**Preliminary Processing of data** 
+
+Some columns with partial information such as mean variance, skewness was removed. Also other variables were checked for completeness. 
+``` {r, results='hide'}
+humactivity1 <- humactivity[,c(-1:-7, -12:-36, -50:-59, -69:-83, -87:-101, 
+                               -103:-112, -125:-139, -141:-150)] 
+# check the proportion of missing values 
+mising.out <- rep(NA, length(humactivity1))
+for (i in 1:ncol (humactivity1)-1){
+mising.out[i] <- as.numeric ( table (!is.na(humactivity1[,i]))["TRUE"]) /length(humactivity1[,i])
+}
+```
+
+There were no missing values in the predictor variables. Similarly we check the `classe` variable. None of value in the `classe` variable were missing. 
+
+``` {r}
+table (is.na (humactivity1$classe))
+```
+
+**Splitting of data **
+
+I decided to split data in 60% training set and 40% test set. The training set only be used for training of model, resampling and cross validation. The split was intentional made provided the size of data set and effect prediction of out of sample prediction. The analysis were done using the package `caret`. 
+
+``` {r, eval=FALSE}
+require(caret)
+set.seed(1234) # adding the seed to make it reproducible split 
+inTrain <- createDataPartition(y = humactivity1$classe, p = 0.6, list = FALSE)
+training <- humactivity1[ inTrain,]
+testing <- humactivity1[-inTrain,]
+# Proportion of training set 
+round (nrow(training)/nrow(humactivity1),2)
+
+# Proportion in testing set 
+round (nrow(testing)/nrow(humactivity1),2)
+```
+
+**Exploratory analysis of the training data**
+
+Before deciding the covariates to use all potential covariates were examined by visualizing their distribution. No formal normality test was useful due to large dataset.
+
+- **Plotting distribution using histogram**
+
+``` {r, eval=FALSE }
+# the following code works for windows R-GUI
+# plot new window works differently in other interface.
+# for example R studio graphic device do not allow multiple device using 
+# dev.new function
+for (i in 0:2){
+j = i*20 + 1; k = j + 19
+if(k > 52){
+  k = 52  }
+# develop new plot with specify size 
+dev.new(width=24, height=15)
+par(mfrow = c(5,4))
+for (i in j:k){
+par (mar=c(4.1,1.1,1.1,1.1))
+#bottom, left, top and right margins 
+x <- training[,i]
+pt <- hist(x, col = i, prob=TRUE, main = NULL, xlab = paste(i, "-", names(training)[i], sep = ""))
+} }
+```
+
+- **Near zero variation test**
+
+Another important things to check if any variable has near zero variation. 
+```{r, eval=FALSE}
+# near zero variation 
+nzv <- nearZeroVar(training, saveMetrics = TRUE)
+print(nzv)
+```
+The results show no near zero variation for any other variables. 
+
+```
+                    freqRatio percentUnique zeroVar   nzv
+roll_belt             1.074681    8.44089674   FALSE FALSE
+pitch_belt            1.132743   13.60394022   FALSE FALSE
+yaw_belt              1.110727   14.46161685   FALSE FALSE
+total_accel_belt      1.070275    0.23777174   FALSE FALSE
+gyros_belt_x          1.071693    1.02751359   FALSE FALSE
+gyros_belt_y          1.123699    0.54347826   FALSE FALSE
+gyros_belt_z          1.043636    1.34171196   FALSE FALSE
+accel_belt_x          1.101322    1.30774457   FALSE FALSE
+accel_belt_y          1.113269    1.11243207   FALSE FALSE
+accel_belt_z          1.082721    2.42017663   FALSE FALSE
+magnet_belt_x         1.030435    2.52207880   FALSE FALSE
+magnet_belt_y         1.051471    2.39470109   FALSE FALSE
+magnet_belt_z         1.003460    3.54959239   FALSE FALSE
+roll_arm             53.648649   19.43783967   FALSE FALSE
+pitch_arm            79.440000   22.36752717   FALSE FALSE
+yaw_arm              29.191176   21.52683424   FALSE FALSE
+total_accel_arm       1.041509    0.55197011   FALSE FALSE
+gyros_arm_x           1.016077    5.29042120   FALSE FALSE
+gyros_arm_y           1.511628    3.04008152   FALSE FALSE
+gyros_arm_z           1.231579    1.89368207   FALSE FALSE
+accel_arm_x           1.019608    6.44531250   FALSE FALSE
+accel_arm_y           1.101562    4.46671196   FALSE FALSE
+accel_arm_z           1.050000    6.40285326   FALSE FALSE
+magnet_arm_x          1.037037   11.14130435   FALSE FALSE
+magnet_arm_y          1.018182    7.20957880   FALSE FALSE
+magnet_arm_z          1.126984   10.50441576   FALSE FALSE
+roll_dumbbell         1.063291   87.42357337   FALSE FALSE
+pitch_dumbbell        2.357143   85.18172554   FALSE FALSE
+yaw_dumbbell          1.076923   86.70176630   FALSE FALSE
+total_accel_dumbbell  1.045077    0.35665761   FALSE FALSE
+gyros_dumbbell_x      1.054945    2.00407609   FALSE FALSE
+gyros_dumbbell_y      1.150000    2.27581522   FALSE FALSE
+gyros_dumbbell_z      1.025210    1.62194293   FALSE FALSE
+accel_dumbbell_x      1.015152    3.38824728   FALSE FALSE
+accel_dumbbell_y      1.177305    3.82982337   FALSE FALSE
+accel_dumbbell_z      1.092715    3.33729620   FALSE FALSE
+magnet_dumbbell_x     1.084906    8.78906250   FALSE FALSE
+magnet_dumbbell_y     1.229358    6.98029891   FALSE FALSE
+magnet_dumbbell_z     1.114035    5.55366848   FALSE FALSE
+roll_forearm         12.449198   14.94565217   FALSE FALSE
+pitch_forearm        70.515152   21.07676630   FALSE FALSE
+yaw_forearm          15.938356   14.29177989   FALSE FALSE
+total_accel_forearm   1.187158    0.56895380   FALSE FALSE
+gyros_forearm_x       1.063492    2.40319293   FALSE FALSE
+gyros_forearm_y       1.057522    6.02072011   FALSE FALSE
+gyros_forearm_z       1.116197    2.40319293   FALSE FALSE
+accel_forearm_x       1.192308    6.49626359   FALSE FALSE
+accel_forearm_y       1.048387    8.16915761   FALSE FALSE
+accel_forearm_z       1.032258    4.65353261   FALSE FALSE
+magnet_forearm_x      1.078431   12.09239130   FALSE FALSE
+magnet_forearm_y      1.160000   15.36175272   FALSE FALSE
+magnet_forearm_z      1.000000   13.34069293   FALSE FALSE
+classe                1.469065    0.04245924   FALSE FALSE
+```
+
+- **Identifying correlated variables**
+
+The model I will trying are either neutral to correlated predictors or are benefited by uncorrelated variables. In any case more variables need higher computation time. So I decided to get rid of the correlated variables. A cut-off of 0.9 was set. As a result of removing highly correlated variables only 45 variables were left. 
+``` {r, eval=FALSE }
+descrCor <- cor(training[,-53])
+highCorr <- sum(abs(descrCor[upper.tri(descrCor)]) > 0.90)
+print(highCorr)
+```
+
+```
+[1] 11
+```
+
+``` {r, eval=FALSE }
+highlyCorDescr <- findCorrelation(descrCor, cutoff = 0.90)
+print(length (highlyCorDescr))
+```
+```
+[1] 7
+```
+
+``` {r, eval=FALSE }
+trainingFld <- training[, -highlyCorDescr]
+testingFld <- testing[,-highlyCorDescr]
+```
+
+- **Analysis of variation** 
+
+Just finding another way to reduce number of variables, I did signficant testing in analysis of variation (ANOVA) approach. The idea here is turning around, i.e. `classe` as x factor and all covariates as y variable, one to one ANOVA with linear model was done. The variable with significant `classe` mean difference (shown by significant mean values) were further used. This will help to find some variables that have linear relationship (thus may be useful) with the `classe` variable. The variables showing p-value less than 0.001 were removed.
+
+``` {r, eval=FALSE}
+# variables with significant group effect on: using anova
+log10p <- rep (NA, length(trainingFld)-1)
+for (i in 1: 45){
+trainingFld1 <- as.matrix (trainingFld[,-46])
+group <- trainingFld[,46]
+out1 <- anova(lm( trainingFld1[,i] ~ group)) 
+log10p[i] <- -log10(out1$ `Pr(>F)`[1])
+}
+non.sig <- which (log10p < 3)
+print(non.sig)
+trainingFldSig <- trainingFld[, -non.sig]
+testingFldSig <- testingFld[-non.sig]
+```
+
+```
+[1]  4  5  6 14 15 27 39 42
+```
+
+- **Distribution over class: overlayed density plots** 
+
+To check if overlayed density plots can provide any clue about usefulness of any variable involved. 
+``` {r, eval=FALSE }
+key_colors <- c("black","green","red","blue", "pink")
+acc_par <- list(superpose.line = list(col = key_colors), lwd=1.5, lty=1.5, alpha = 0.3)
+for (i in 0:1){
+j = i*20 + 1
+k = j + 19
+if(k > 37){
+  k = 37
+  }
+dev.new(width=24, height=15)
+plt <- featurePlot(x = trainingFldSig[, j:k], y = trainingFldSig$classe,
+plot = "density", 
+par.settings=acc_par,
+scales = list(x = list(relation="free"),
+y = list(relation="free")),adjust = 1.5, pch = "|", layout = c(5, 4),
+auto.key = list(columns = 3, col = key_colors, lines=TRUE))    	  
+print(plt)				  
+}
+```
+
+After observing the distributions, the overall impression was it is difficult to find few variable that can explain fully with losing information. So decided to go for all 37 variables for the momonent. The PC analysis can help reduce dimention and scability, however the outlier present in the data clearly present empediment.
+
+- **Linear Dependencies**
+
+Before stepping in training of the model stage, checking whether any of variables show linear dependencies with other was tested.
+
+``` {r, eval=FALSE}
+comboInfo <- findLinearCombos(trainingFldSig)
+print(comboInfo)
+```
+
+**Training of the model**
+
+**Training control parameters**
+
+Considering the dataset, initially 10-fold cross validation repeated 5 times was done. This has been frequently used in other literatures and seems perform well in our situation as well see the results below.  
+The first step to make results reproducible list with seed was created and stored.
+
+```{r,eval=FALSE}
+# seeds to make consistent seeds 
+# target is 10 fold validation with 5 repetition 
+set.seed(123)
+seeds <- vector(mode = "list", length = 51)
+for(i in 1:50) seeds[[i]] <- sample.int(1000, 22)
+seeds[[51]] <- sample.int(1000,1)
+print(seeds)
+```
+``` {r, , eval=FALSE}
+tc <- trainControl("repeatedcv", number=10, repeats=5, seed=seeds, classProbs=TRUE, savePred=T)
+```
+
+***Preprocessing of the data*** 
+
+As part of each function, normalizing data, centering and scaling was done with arguments `preProc=c("BoxCox", "center", "scale")` in caret package `training` function. The transformation was done as the variables show moderate to severe deviation from normal distribution.  The standardizing of the variables was done.   In some cases principle component analysis was done to reduce dimensionality of data and reducing computation time. 
+
+***Machine learning algorithm choice**
+
+First of most simple models was run using all variables. The following is codes (not running mode as some of them may take long time execute), summary of results on accuracy for different algorithms:
+
+``` {r, eval=FALSE}
+
+# linear discriminant analysis 
+ldaFit <- train(classe ~., data=trainingFldSig, method= "lda", trControl=tc, preProc=c("BoxCox", "center", "scale"))
+plsfittesting <- predict(ldaFit, newdata=testing)
+confusionMatrix(data=plsfittesting, testing$classe)
+
+#method= "qda"
+qdaFit <- train(classe ~., data=trainingFldSig, method= "qda", trControl=tc, preProc=c("BoxCox", "center", "scale"))
+qdafittesting <- predict(qdaFit, newdata=testing)
+confusionMatrix(data=qdafittesting, testing$classe)
+
+#k-Nearest Neighbors 
+knnFit <- train(classe ~., data=trainingFldSig, method= "knn", trControl=tc, preProc=c("BoxCox", "center", "scale"))
+knnfittesting <- predict(knnFit, newdata=testing)
+confusionMatrix(data=knnfittesting, testing$classe)
+
+#k-Nearest Neighbors, with pca 
+preProc <- preProcess(trainingFldSig[,-38], method = c("BoxCox","pca"), thresh = 0.8)
+trainPC <- predict(preProc, trainingFldSig[,-38])
+knnFit <- train(trainingFldSig$classe ~., data=trainPC, method= "knn", trControl=tc)
+knnfittesting <- predict(preProc, testingFldSig[,-38])
+confusionMatrix( testing$classe, predict(knnFit, knnfittesting ))
+
+
+# method = 'bstTree'
+boostTFit <- train(classe ~., data=trainingFldSig, method= "bstTree", trControl=tc, preProc=c("BoxCox", "center", "scale"))
+boostTfittesting <- predict(boostTFit, newdata=testing)
+confusionMatrix(data=boostTfittesting, testing$classe)
+# interestingly this method did poor in discrimination of  classe A and B but fairly well for others                  
+
+# Tree bagging method 
+bagFit <- train(classe ~., data=trainingFldSig, method= "treebag", trControl=tc, preProc=c("BoxCox", "center", "scale"))
+bagfittesting <- predict(bagFit, newdata=testing)
+confusionMatrix(data=bagfittesting, testing$classe)
+
+#Random forest , "rf", with pca 
+preProc <- preProcess(trainingFldSig[,-38], method = c("BoxCox","pca"), thresh = 0.8)
+trainPC <- predict(preProc, trainingFldSig[,-38])
+rfFit <- train(trainingFldSig$classe ~., data=trainPC, method= "rf", trControl=tc)
+rffittesting <- predict(preProc, testingFldSig[,-38])
+confusionMatrix( testing$classe, predict(rfFit, rffittesting ))
+```
+
+In the above listed method K-Nearest neighbor provides higher accuracy and time required to implement is fairly fast. The method as Tree bagging provides greater accuracy than K-Nearest Neighbor method. However the highest accuracy was achieved using random forest (my choice) - however the time required to complete is very high. The following is results and script. 
+
+
+``` {r, eval=FALSE }
+rfFit <- train(classe ~., data=trainingFldSig, method=  "rf", trControl=tc, preProc=c("BoxCox", "center", "scale"))
+rffittesting <- predict(rfFit, newdata=testing)
+confusionMatrix(data=rffittesting, testing$classe)
+```
+
+<img class=center src=/Users/umesh.rosyara/Documents/GitHub/mlc/figure/accuracies.jpg height=150>
+
+Based on the 37 pedictors and 11776 samples, the following was the accuracy in cross validation (10 fold, repeated 5 times). 
+
+```
+mtry  Accuracy  Kappa  Accuracy SD  Kappa SD
+2     0.987     0.984  0.00286      0.00361 
+19    0.989     0.986  0.00321      0.00407 
+37    0.983     0.979  0.00362      0.00459 
+```
+<img class=center src=/Users/umesh.rosyara/Documents/GitHub/mlc/figure/ac_cv_random_pred.png height=150>
+
+
+Accuracy was used to select the optimal model using  the largest value.
+The final value used for the model was mtry = 19. The following is confusion matrix.
+
+<img class=center src=/Users/umesh.rosyara/Documents/GitHub/mlc/figure/rf_mat.jpg height=150>
+
+The following are overall accuracy stastics was 0.9906 with 95% confidence interval being 0.9882 -  0.9926 in testing set. The kappa stastic was 0.9881. The following is summary statistics by class:  
+
+
+```          
+                        Class: A Class: B Class: C Class: D Class: E
+  Sensitivity            0.9991   0.9829   0.9861   0.9876   0.9924
+  Specificity            0.9966   0.9973   0.9958   0.9988   0.9995
+  Pos Pred Value         0.9916   0.9887   0.9804   0.9937   0.9979
+  Neg Pred Value         0.9996   0.9959   0.9971   0.9976   0.9983
+  Prevalence             0.2845   0.1935   0.1744   0.1639   0.1838
+  Detection Rate         0.2842   0.1902   0.1719   0.1619   0.1824
+  Detection Prevalence   0.2866   0.1923   0.1754   0.1629   0.1828
+  Balanced Accuracy      0.9979   0.9901   0.9910   0.9932   0.9960
+
+```
+In conclusion `rf` model based on 37 predictors provides very high accuracy of prediction in this dataset, however running the model required substential time. 
+
