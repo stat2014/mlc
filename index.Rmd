@@ -1,12 +1,17 @@
 ---
 title: "Prediction Project Write-up report "
-
 ---
+
+***Summary***
+
+Of the total variable avialable in the dataset only 37 variables were used as predictor for the classe variable, the variables were dropped based on missing values, multi-colinearity and not significantly dividing the classes. All **37**  were normalized using Box-Cox transformation. The either all 37 variables were used after centering and scaling or PC components expaining 80% of variation in PCA were used in building of **8 different models** (Linear Discriminant Analysis, Quadratic Discriminant Analysis,k-Nearest Neighbors, Boosted Tree, Bagged CART, Random Forest). The data provided for training of the model was divided into **60% training** and **40% testing** for inernal evaluation before use it the ultimate quiz (testing) set. For each model **10-fold cross validation** repeated **5 times** was done. Of the models evaluated the **random forest** model (with number of trees 500) with out-of **sample error rate of 1%**. This algorithm was used in the test (quiz) set. 
+
+
 ***Background*** 
 
 The data from the area of Human Activity Recognition, provided consists six young health participants were asked to perform exercise repetitively. This consists of one set of 10 repetitions of the Unilateral Dumbbell Biceps Curl in five different fashions: exactly according to the specification (Class A), throwing the elbows to the front (Class B), lifting the dumbbell only halfway (Class C), lowering the dumbbell only halfway (Class D) and throwing the hips to the front (Class E).The details of the project is provided here [http://groupware.les.inf.puc-rio.br/har](http://groupware.les.inf.puc-rio.br/har). 
 
-***Data analysis results***
+***Details on Model development and application***
 
 In the following section I have discussed the different steps along with scripts and outputs. 
 
@@ -14,7 +19,10 @@ In the following section I have discussed the different steps along with scripts
 
 Note: Execution of some of chucks is disabled that need long time to run. Output of such chucks is provided please feel free run such chucks, if needed. Also results of some of just pipeline chunks is hidden. 
 
-**Reading the data** 
+**Preliminaries**
+
+
+- **Reading the data** 
 
 ```{r, results='hide'}
 setwd("C:/Users/umesh.rosyara/Documents/GitHub/mlc/data")
@@ -22,7 +30,7 @@ humactivity <- read.csv("pml-training.csv", head = TRUE)
 summary(humactivity) 
 ```
 
-**Preliminary Processing of data** 
+- **Preliminary Processing of data** 
 
 Some columns with partial information such as mean variance, skewness was removed. Also other variables were checked for completeness. 
 ``` {r, results='hide'}
@@ -94,66 +102,11 @@ print(nzv)
 ```
 The results show no near zero variation for any other variables. 
 
-```
-                    freqRatio percentUnique zeroVar   nzv
-roll_belt             1.074681    8.44089674   FALSE FALSE
-pitch_belt            1.132743   13.60394022   FALSE FALSE
-yaw_belt              1.110727   14.46161685   FALSE FALSE
-total_accel_belt      1.070275    0.23777174   FALSE FALSE
-gyros_belt_x          1.071693    1.02751359   FALSE FALSE
-gyros_belt_y          1.123699    0.54347826   FALSE FALSE
-gyros_belt_z          1.043636    1.34171196   FALSE FALSE
-accel_belt_x          1.101322    1.30774457   FALSE FALSE
-accel_belt_y          1.113269    1.11243207   FALSE FALSE
-accel_belt_z          1.082721    2.42017663   FALSE FALSE
-magnet_belt_x         1.030435    2.52207880   FALSE FALSE
-magnet_belt_y         1.051471    2.39470109   FALSE FALSE
-magnet_belt_z         1.003460    3.54959239   FALSE FALSE
-roll_arm             53.648649   19.43783967   FALSE FALSE
-pitch_arm            79.440000   22.36752717   FALSE FALSE
-yaw_arm              29.191176   21.52683424   FALSE FALSE
-total_accel_arm       1.041509    0.55197011   FALSE FALSE
-gyros_arm_x           1.016077    5.29042120   FALSE FALSE
-gyros_arm_y           1.511628    3.04008152   FALSE FALSE
-gyros_arm_z           1.231579    1.89368207   FALSE FALSE
-accel_arm_x           1.019608    6.44531250   FALSE FALSE
-accel_arm_y           1.101562    4.46671196   FALSE FALSE
-accel_arm_z           1.050000    6.40285326   FALSE FALSE
-magnet_arm_x          1.037037   11.14130435   FALSE FALSE
-magnet_arm_y          1.018182    7.20957880   FALSE FALSE
-magnet_arm_z          1.126984   10.50441576   FALSE FALSE
-roll_dumbbell         1.063291   87.42357337   FALSE FALSE
-pitch_dumbbell        2.357143   85.18172554   FALSE FALSE
-yaw_dumbbell          1.076923   86.70176630   FALSE FALSE
-total_accel_dumbbell  1.045077    0.35665761   FALSE FALSE
-gyros_dumbbell_x      1.054945    2.00407609   FALSE FALSE
-gyros_dumbbell_y      1.150000    2.27581522   FALSE FALSE
-gyros_dumbbell_z      1.025210    1.62194293   FALSE FALSE
-accel_dumbbell_x      1.015152    3.38824728   FALSE FALSE
-accel_dumbbell_y      1.177305    3.82982337   FALSE FALSE
-accel_dumbbell_z      1.092715    3.33729620   FALSE FALSE
-magnet_dumbbell_x     1.084906    8.78906250   FALSE FALSE
-magnet_dumbbell_y     1.229358    6.98029891   FALSE FALSE
-magnet_dumbbell_z     1.114035    5.55366848   FALSE FALSE
-roll_forearm         12.449198   14.94565217   FALSE FALSE
-pitch_forearm        70.515152   21.07676630   FALSE FALSE
-yaw_forearm          15.938356   14.29177989   FALSE FALSE
-total_accel_forearm   1.187158    0.56895380   FALSE FALSE
-gyros_forearm_x       1.063492    2.40319293   FALSE FALSE
-gyros_forearm_y       1.057522    6.02072011   FALSE FALSE
-gyros_forearm_z       1.116197    2.40319293   FALSE FALSE
-accel_forearm_x       1.192308    6.49626359   FALSE FALSE
-accel_forearm_y       1.048387    8.16915761   FALSE FALSE
-accel_forearm_z       1.032258    4.65353261   FALSE FALSE
-magnet_forearm_x      1.078431   12.09239130   FALSE FALSE
-magnet_forearm_y      1.160000   15.36175272   FALSE FALSE
-magnet_forearm_z      1.000000   13.34069293   FALSE FALSE
-classe                1.469065    0.04245924   FALSE FALSE
-```
 
 - **Identifying correlated variables**
 
-The model I will trying are either neutral to correlated predictors or are benefited by uncorrelated variables. In any case more variables need higher computation time. So I decided to get rid of the correlated variables. A cut-off of 0.9 was set. As a result of removing highly correlated variables only 45 variables were left. 
+The model I will trying are either neutral to correlated predictors or are benefited by uncorrelated variables. In any case more variables need higher computation time. So I decided to get rid of the correlated variables. A cut-off of 0.9 was set. As a result of removing highly correlated variables only 45 variables were left.
+
 ``` {r, eval=FALSE }
 descrCor <- cor(training[,-53])
 highCorr <- sum(abs(descrCor[upper.tri(descrCor)]) > 0.90)
@@ -243,7 +196,7 @@ The first step to make results reproducible list with seed was created and store
 
 ```{r,eval=FALSE}
 # seeds to make consistent seeds 
-# target is 10 fold validation with 5 repetition 
+# target is 10 fold cross validation with 5 repetition 
 set.seed(123)
 seeds <- vector(mode = "list", length = 51)
 for(i in 1:50) seeds[[i]] <- sample.int(1000, 22)
@@ -254,11 +207,12 @@ print(seeds)
 tc <- trainControl("repeatedcv", number=10, repeats=5, seed=seeds, classProbs=TRUE, savePred=T)
 ```
 
-***Preprocessing of the data*** 
+**Preprocessing of the data** 
 
 As part of each function, normalizing data, centering and scaling was done with arguments `preProc=c("BoxCox", "center", "scale")` in caret package `training` function. The transformation was done as the variables show moderate to severe deviation from normal distribution.  The standardizing of the variables was done.   In some cases principle component analysis was done to reduce dimensionality of data and reducing computation time. 
 
-***Machine learning algorithm choice**
+**Machine learning algorithm choice**
+
 
 First of most simple models was run using all variables. The following is codes (not running mode as some of them may take long time execute), summary of results on accuracy for different algorithms:
 
@@ -348,5 +302,8 @@ The following are overall accuracy stastics was 0.9906 with 95% confidence inter
   Balanced Accuracy      0.9979   0.9901   0.9910   0.9932   0.9960
 
 ```
-In conclusion `rf` model based on 37 predictors provides very high accuracy of prediction in this dataset, however running the model required substential time. 
+
+**Conclusion**
+
+In conclusion `rf` model based on 37 predictors provides very high accuracy of prediction in this dataset with expectation of  1% of out of sample error rate, however running the model required substential time.K-nearest neigbhbor is alternative with ~5% out of sample error rate although with significantly less time required to perform compuation can be an alternative.  
 
